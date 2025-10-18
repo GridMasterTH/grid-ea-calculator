@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Grid EA Liquidation & Drawdown Calculator (XAUUSD)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#111827;--text:#e5e7eb;--muted:#9ca3af;--accent:#22c55e;--warn:#ef4444;--card:#0b1220;}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;background:linear-gradient(180deg,#0b1220,#0f172a);} 
+  header{padding:24px 20px;color:var(--text);text-align:center}
+  h1{margin:0 0 6px;font-size:22px;font-weight:800;letter-spacing:.2px}
+  p.subtitle{margin:0;color:var(--muted);font-size:13px}
+  .container{max-width:1100px;margin:0 auto;padding:18px}
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr;}}
+  .card{background:rgba(255,255,255,0.04);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.08);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+  .card h2{margin:0 0 14px;font-size:16px;color:var(--text)}
+  .section{padding:16px}
+  .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+  label{color:var(--muted);font-size:12px}
+  .field{display:flex;flex-direction:column;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);padding:10px;border-radius:10px}
+  input,select{width:100%;background:#0d1426;border:1px solid rgba(255,255,255,.12);color:var(--text);border-radius:8px;padding:9px 10px;font-size:14px;outline:none}
+  input::placeholder{color:#6b7280}
+  .btn{display:inline-block;background:var(--accent);color:#052e16;border:none;padding:12px 16px;border-radius:10px;font-weight:800;cursor:pointer}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .btn-outline{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--text)}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media (max-width:640px){.stats{grid-template-columns:1fr}}
+  .stat{background:linear-gradient(180deg,rgba(34,197,94,.08),rgba(255,255,255,.02));border:1px solid rgba(34,197,94,.2);padding:12px;border-radius:12px}
+  .stat h3{margin:0;color:var(--muted);font-weight:600;font-size:12px}
+  .stat .v{margin-top:4px;font-weight:900;font-size:18px;color:var(--text)}
+  .stat.warn{background:linear-gradient(180deg,rgba(239,68,68,.1),rgba(255,255,255,.02));border-color:rgba(239,68,68,.35)}
+  table{width:100%;border-collapse:collapse;font-size:13px;border-spacing:0;overflow:auto}
+  thead th{position:sticky;top:0;background:#0c1324;color:#9fb2d8}
+  th,td{border-bottom:1px dashed rgba(255,255,255,.08);padding:8px 10px;text-align:right;color:var(--text)}
+  th:first-child,td:first-child{text-align:left}
+  .muted{color:var(--muted)}
+  .footer{color:var(--muted);font-size:12px;padding:12px 16px}
+  .badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:11px;letter-spacing:.2px;background:#0c1324;border:1px solid rgba(255,255,255,.12);color:#9fb2d8}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Grid EA: คำนวณการลาก / เปิดเพิ่ม / จุดล้างพอร์ต (XAUUSD)</h1>
+    <p class="subtitle">รองรับลอทคงที่ หรือกำหนดลิสต์ลอทเอง (เช่น 0.10,0.10,0.15,0.20,…). สูตรนี้ประมาณการตามมาตรฐานทั่วไป — 1 lot = 100 oz, tick = 0.01 USD/oz, margin = ราคา×สัญญา×ลอท ÷ เลเวอเรจ, Stop‑out ใช้ Margin Level.</p>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+      <div class="card section">
+        <h2>ตั้งค่าอินพุต</h2>
+        <div class="row">
+          <div class="field" style="grid-column: span 3;">
+            <label>เงินทุน / Balance (USD)</label>
+            <input id="balance" type="number" step="0.01" value="10000" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>เลเวอเรจ (เช่น 2000 = 1:2000)</label>
+            <input id="leverage" type="number" step="1" value="2000" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>Stop‑out (%) — ระดับ Margin Level ที่โดนบังคับปิด</label>
+            <input id="stopout" type="number" step="1" value="50" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>ฝั่งที่เล่น</label>
+            <select id="side">
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>ราคาเข้าไม้แรก (XAUUSD)</label>
+            <input id="entry" type="number" step="0.01" value="2400.00" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>ระยะเปิดเพิ่ม Pipstep (จุดราคา)</label>
+            <input id="pipstep" type="number" step="0.01" value="10" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>TP ต่อไม้ (จุดราคา) — ใช้คำนวณกำไรต่อไม้ (ตัวเลือก)</label>
+            <input id="tp" type="number" step="0.01" value="20" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>ลอทคงที่ต่อไม้ (ถ้าไม่ได้ใส่ลิสต์ลอท)</label>
+            <input id="fixedLot" type="number" step="0.01" value="0.10" />
+          </div>
+          <div class="field" style="grid-column: span 6;">
+            <label>ลิสต์ลอทกำหนดเอง (คั่นด้วยคอมมา เช่น 0.10,0.10,0.15,0.20) — เว้นว่างเพื่อใช้ลอทคงที่</label>
+            <input id="lotList" type="text" placeholder="เช่น 0.10,0.10,0.15,0.20" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>ขนาดสัญญาต่อ 1.00 lot (oz) — ค่าเริ่มต้น 100</label>
+            <input id="contract" type="number" step="1" value="100" />
+          </div>
+          <div class="field" style="grid-column: span 3;">
+            <label>ขนาด Tick/Point ของราคา (USD/oz) — XAU ทั่วไป 0.01</label>
+            <input id="tick" type="number" step="0.001" value="0.01" />
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn" id="runBtn">คำนวณ</button>
+          <button class="btn btn-outline" id="demoBtn">ใส่ตัวอย่างลิสต์ลอท Martingale</button>
+        </div>
+      </div>
+
+      <div class="card section">
+        <h2>สรุปผล</h2>
+        <div class="stats" id="stats">
+          <div class="stat"><h3>จำนวนไม้ที่ถูกเปิดเพิ่ม (รวมไม้แรก)</h3><div class="v" id="statOrders">-</div></div>
+          <div class="stat warn"><h3>ราคาที่คาดว่าโดนล้าง (Stop‑out)</h3><div class="v" id="statLiquid">-</div></div>
+          <div class="stat"><h3>ขาดทุนลอยที่จุดล้าง (USD)</h3><div class="v" id="statLoss">-</div></div>
+          <div class="stat"><h3>รวมลอททั้งหมด</h3><div class="v" id="statLots">-</div></div>
+          <div class="stat"><h3>Margin ใช้อยู่ (ที่จุดล้าง)</h3><div class="v" id="statMargin">-</div></div>
+          <div class="stat"><h3>Margin Level (ที่จุดล้าง)</h3><div class="v" id="statML">-</div></div>
+        </div>
+        <p class="footer">หมายเหตุ: การคำนวณนี้เป็น <span class="badge">การประมาณ</span> ตามสมมติฐานทั่วไปของ CFD XAUUSD — โบรกเกอร์จริงอาจมีสูตรมาร์จิน/สต็อปเอาท์ต่างกัน, ค่าสวอป/ค่าคอมมิชชันไม่รวม</p>
+      </div>
+    </div>
+
+    <div class="card section" style="margin-top:16px;overflow:auto">
+      <h2>ไทม์ไลน์การลากผิดทาง (คำนวณทีละ Pipstep)</h2>
+      <div class="muted" style="margin-bottom:8px">หยุดที่ขั้นแรกที่ Margin Level ≤ Stop‑out%</div>
+      <div style="overflow:auto">
+        <table id="table"><thead><tr>
+          <th>#Step</th>
+          <th>ราคา ณ ขั้น</th>
+          <th>เปิดกี่ไม้</th>
+          <th>ลอทรวม</th>
+          <th>มาร์จินใช้</th>
+          <th>กำไร/ขาดทุนลอย</th>
+          <th>อีเควตี้</th>
+          <th>Margin Level</th>
+        </tr></thead><tbody id="tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="footer">© Grid EA Helper — เวอร์ชั่นสาธิต HTML ไฟล์เดียว นำไปฝัง Blogger ได้ทันที (โหมด HTML) หรืออัปขึ้น GitHub Pages แล้วฝังด้วย &lt;iframe&gt;.</div>
+  </div>
+
+<script>
+function fmt(n, d=2){
+  if(!isFinite(n)) return '-';
+  return Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+}
+function parseLotList(txt){
+  if(!txt) return null;
+  const arr = txt.split(/[,\s]+/).map(s=>parseFloat(s)).filter(v=>!isNaN(v)&&v>0);
+  return arr.length?arr:null;
+}
+function lotAt(i, fixedLot, lotList){
+  if(lotList && lotList.length){
+    if(i < lotList.length) return lotList[i];
+    return lotList[lotList.length-1]; // เกินลิสต์ให้ใช้ค่าล่าสุดซ้ำ
+  }
+  return fixedLot;
+}
+
+function runCalc(){
+  const balance = +document.getElementById('balance').value || 0;
+  const lev = +document.getElementById('leverage').value || 1;
+  const stopoutPct = (+document.getElementById('stopout').value || 50)/100;
+  const side = document.getElementById('side').value; // 'buy'|'sell'
+  const entry = +document.getElementById('entry').value || 0;
+  const pipstep = +document.getElementById('pipstep').value || 0;
+  const tp = +document.getElementById('tp').value || 0;
+  const fixedLot = +document.getElementById('fixedLot').value || 0;
+  const lotList = parseLotList(document.getElementById('lotList').value);
+  const contract = +document.getElementById('contract').value || 100; // oz per 1 lot
+  const tick = +document.getElementById('tick').value || 0.01; // USD per oz per 1 point
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  if(balance<=0 || entry<=0 || pipstep<=0 || contract<=0 || lev<=0){
+    alert('กรอกข้อมูลให้ถูกต้อง: balance, entry, pipstep, contract, leverage ต้อง > 0');
+    return;
+  }
+
+  // ฟังก์ชันช่วยคำนวณ
+  const dir = (side==='buy') ? -1 : +1; // เดินราคาผิดทาง: buy → ลง, sell → ขึ้น
+  function priceAt(step){ return entry + dir * step * pipstep; }
+
+  function marginUsed(currentPrice, lots){
+    // สมมติ: margin = currentPrice * contract * lots / leverage
+    return currentPrice * contract * lots / lev;
+  }
+
+  function plFloating(currentPrice, entries){
+    // ผลรวมกำไร/ขาดทุนของแต่ละไม้ (ค่าบวก = กำไร)
+    let pl=0;
+    for(const e of entries){
+      const move = (currentPrice - e.price); // ถ้า buy แล้วลง จะติดลบ, ถ้า sell แล้วขึ้น จะติดลบ
+      const sign = (e.side==='buy')? +1 : -1; // P/L = (current - entry)*size*lot for buy; สำหรับ sell คูณ -1
+      pl += sign * move * contract * e.lot;
+    }
+    return pl;
+  }
+
+  let entries = [];
+  // step = 0 คือไม้แรก
+  entries.push({price: entry, lot: lotAt(0,fixedLot,lotList), side});
+
+  let liquidationStep = null;
+  const maxSteps = 2000; // ลิมิตเพื่อความปลอดภัย
+
+  for(let step=0; step<=maxSteps; step++){
+    if(step>0){
+      // เมื่อขยับไปอีก 1 pipstep ผิดทาง → เปิดไม้เพิ่ม
+      const newPrice = priceAt(step);
+      entries.push({price:newPrice, lot: lotAt(step,fixedLot,lotList), side});
+    }
+
+    // สถานะ ณ ราคาปัจจุบัน (ผิดทางมาถึง step นี้แล้ว)
+    const currentPrice = priceAt(step);
+    const lotsSum = entries.reduce((s,e)=>s+e.lot,0);
+    const margin = marginUsed(currentPrice, lotsSum);
+    const pl = plFloating(currentPrice, entries);
+    const equity = balance + pl;
+    const ml = equity / Math.max(margin,1e-9); // Margin Level (ratio)
+
+    // เติมตาราง
+    const tr=document.createElement('tr');
+    function td(v){ const x=document.createElement('td'); x.textContent=v; return x; }
+    tr.appendChild(td(step));
+    tr.appendChild(td(fmt(currentPrice,2)));
+    tr.appendChild(td(entries.length));
+    tr.appendChild(td(fmt(lotsSum,2)));
+    tr.appendChild(td(fmt(margin,2)));
+    tr.appendChild(td(fmt(pl,2)));
+    tr.appendChild(td(fmt(equity,2)));
+    tr.appendChild(td((ml*100).toFixed(2) + '%'));
+    tbody.appendChild(tr);
+
+    // เงื่อนไขล้าง: Margin Level ≤ Stop‑out%
+    if((ml) <= stopoutPct){ liquidationStep = step; break; }
+
+    // ถ้าอีเควตี้ติดลบจัด ๆ ก็หยุดป้องกันอินฟินิตี้
+    if(equity<=0){ liquidationStep = step; break; }
+  }
+
+  // สรุป
+  if(liquidationStep===null){
+    document.getElementById('statOrders').textContent = entries.length;
+    document.getElementById('statLiquid').textContent = 'ไม่ถึงจุดล้างภายใน '+maxSteps+' ขั้น';
+    document.getElementById('statLoss').textContent = '-';
+    document.getElementById('statLots').textContent = fmt(entries.reduce((s,e)=>s+e.lot,0),2);
+    document.getElementById('statMargin').textContent = '-';
+    document.getElementById('statML').textContent = '-';
+    return;
+  }
+
+  const L = liquidationStep;
+  const liquidPrice = priceAt(L);
+  const lotsSum = entries.slice(0,L+1).reduce((s,e)=>s+e.lot,0);
+  const margin = marginUsed(liquidPrice, lotsSum);
+  const pl = plFloating(liquidPrice, entries.slice(0,L+1));
+  const equity = balance + pl;
+  const ml = equity / Math.max(margin,1e-9);
+
+  document.getElementById('statOrders').textContent = (L+1); // รวมไม้แรก
+  document.getElementById('statLiquid').textContent = fmt(liquidPrice,2) + ' USD/oz';
+  document.getElementById('statLoss').textContent = fmt(-Math.min(pl,0),2);
+  document.getElementById('statLots').textContent = fmt(lotsSum,2);
+  document.getElementById('statMargin').textContent = fmt(margin,2);
+  document.getElementById('statML').textContent = (ml*100).toFixed(2)+'%';
+}
+
+// demo list (เช่น ไม้โต)
+document.getElementById('demoBtn').addEventListener('click',()=>{
+  document.getElementById('lotList').value = '0.10, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40';
+});
+
+document.getElementById('runBtn').addEventListener('click', runCalc);
+
+// คำนวณครั้งแรกด้วยค่าเริ่มต้น
+runCalc();
+</script>
+</body>
+</html>
