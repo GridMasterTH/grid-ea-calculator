@@ -186,7 +186,7 @@ function runCalc(){
     return;
   }
 
-  const dir = (side==='buy') ? -1 : +1;
+  const dir = (side==='buy') ? -1 : +1; // เดินราคาผิดทาง
   function priceAt(step){ return entry + dir * step * pipstep; }
   function marginUsed(currentPrice, lots){ return currentPrice * contract * lots / lev; }
   function plFloating(currentPrice, entries){
@@ -210,6 +210,7 @@ function runCalc(){
       const newPrice = priceAt(step);
       entries.push({price:newPrice, lot: lotAt(step,fixedLot,lotList), side});
     }
+
     const currentPrice = priceAt(step);
     const lotsSum = entries.reduce((s,e)=>s+e.lot,0);
     const margin = marginUsed(currentPrice, lotsSum);
@@ -229,4 +230,62 @@ function runCalc(){
     tr.appendChild(td((ml*100).toFixed(2)+'%'));
     tbody.appendChild(tr);
 
-    if((ml) <= stopoutPct){ liquidationStep =
+    if(ml <= stopoutPct || equity <= 0){
+      liquidationStep = step;
+      break;
+    }
+  }
+
+  if(liquidationStep===null){
+    document.getElementById('statOrders').textContent = entries.length;
+    document.getElementById('statLiquid').textContent = 'ไม่ถึงจุดล้างภายใน '+maxSteps+' ขั้น';
+    document.getElementById('statLoss').textContent = '-';
+    document.getElementById('statLots').textContent = fmt(entries.reduce((s,e)=>s+e.lot,0),2);
+    document.getElementById('statMargin').textContent = '-';
+    document.getElementById('statML').textContent = '-';
+    return;
+  }
+
+  const L = liquidationStep;
+  const liquidPrice = priceAt(L);
+  const lotsSum = entries.slice(0,L+1).reduce((s,e)=>s+e.lot,0);
+  const margin = marginUsed(liquidPrice, lotsSum);
+  const pl = plFloating(liquidPrice, entries.slice(0,L+1));
+  const equity = balance + pl;
+  const ml = equity / Math.max(margin,1e-9);
+
+  document.getElementById('statOrders').textContent = (L+1);
+  document.getElementById('statLiquid').textContent = fmt(liquidPrice,2) + ' USD/oz';
+  document.getElementById('statLoss').textContent = fmt(-Math.min(pl,0),2);
+  document.getElementById('statLots').textContent = fmt(lotsSum,2);
+  document.getElementById('statMargin').textContent = fmt(margin,2);
+  document.getElementById('statML').textContent = (ml*100).toFixed(2)+'%';
+}
+
+// hints แปลงหน่วย pip ↔ ระยะราคา
+function updateConvHints(){
+  const tick = +document.getElementById('tick').value || 0.01;
+  const pipMode = document.getElementById('pipMode')?.checked || false;
+  const pipRaw = +document.getElementById('pipstep').value || 0;
+  const tpRaw = +document.getElementById('tp').value || 0;
+  const pipConvEl = document.getElementById('pipConv');
+  const tpConvEl = document.getElementById('tpConv');
+  if(pipConvEl){ pipConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(pipRaw*tick,2)}` : (tick>0? `→ จำนวนจุด: ${fmt(pipRaw/tick,0)}` : ''); }
+  if(tpConvEl){ tpConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(tpRaw*tick,2)}` : (tick>0? `→ จำนวนจุด: ${fmt(tpRaw/tick,0)}` : ''); }
+}
+['pipstep','tp','tick','pipMode'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input', updateConvHints); }});
+
+// ปุ่มตัวอย่างลิสต์ลอท
+const demoBtn = document.getElementById('demoBtn');
+if(demoBtn){ demoBtn.addEventListener('click',()=>{ document.getElementById('lotList').value = '0.10, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40'; }); }
+
+// ปุ่มคำนวณ
+const runBtn = document.getElementById('runBtn');
+if(runBtn){ runBtn.addEventListener('click', ()=>{ updateConvHints(); runCalc(); }); }
+
+// เริ่มต้น
+updateConvHints();
+runCalc();
+</script>
+</body>
+</html>
