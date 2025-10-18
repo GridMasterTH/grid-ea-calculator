@@ -74,12 +74,14 @@
             <input id="entry" type="number" step="0.01" value="2400.00" />
           </div>
           <div class="field" style="grid-column: span 3;">
-            <label>ระยะเปิดเพิ่ม Pipstep (จุดราคา)</label>
-            <input id="pipstep" type="number" step="0.01" value="10" />
+            <label>ระยะเปิดเพิ่ม Pipstep (จุดราคา หรือ จำนวนจุด)</label>
+            <input id="pipstep" type="number" step="0.01" value="1000" />
+            <div class="muted" id="pipConv">→ ระยะราคา: -</div>
           </div>
           <div class="field" style="grid-column: span 3;">
-            <label>TP ต่อไม้ (จุดราคา) — ใช้คำนวณกำไรต่อไม้ (ตัวเลือก)</label>
-            <input id="tp" type="number" step="0.01" value="20" />
+            <label>TP ต่อไม้ (จุดราคา หรือ จำนวนจุด) — ใช้คำนวณกำไรต่อไม้ (ตัวเลือก)</label>
+            <input id="tp" type="number" step="0.01" value="1000" />
+            <div class="muted" id="tpConv">→ ระยะราคา: -</div>
           </div>
           <div class="field" style="grid-column: span 3;">
             <label>ลอทคงที่ต่อไม้ (ถ้าไม่ได้ใส่ลิสต์ลอท)</label>
@@ -96,6 +98,10 @@
           <div class="field" style="grid-column: span 3;">
             <label>ขนาด Tick/Point ของราคา (USD/oz) — XAU ทั่วไป 0.01</label>
             <input id="tick" type="number" step="0.001" value="0.01" />
+          </div>
+          <div class="field" style="grid-column: span 6;">
+            <label><input id="pipMode" type="checkbox" checked /> กรอก Pipstep/TP เป็นจำนวน <b>จุด (pip)</b></label>
+            <div class="muted">ตัวอย่าง: ถ้า tick=0.01 → 1000 จุด = 10.00 หน่วยราคา</div>
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:14px">
@@ -151,7 +157,7 @@ function parseLotList(txt){
 function lotAt(i, fixedLot, lotList){
   if(lotList && lotList.length){
     if(i < lotList.length) return lotList[i];
-    return lotList[lotList.length-1]; // เกินลิสต์ให้ใช้ค่าล่าสุดซ้ำ
+    return lotList[lotList.length-1];
   }
   return fixedLot;
 }
@@ -160,14 +166,17 @@ function runCalc(){
   const balance = +document.getElementById('balance').value || 0;
   const lev = +document.getElementById('leverage').value || 1;
   const stopoutPct = (+document.getElementById('stopout').value || 50)/100;
-  const side = document.getElementById('side').value; // 'buy'|'sell'
+  const side = document.getElementById('side').value;
   const entry = +document.getElementById('entry').value || 0;
-  const pipstep = +document.getElementById('pipstep').value || 0;
-  const tp = +document.getElementById('tp').value || 0;
   const fixedLot = +document.getElementById('fixedLot').value || 0;
   const lotList = parseLotList(document.getElementById('lotList').value);
-  const contract = +document.getElementById('contract').value || 100; // oz per 1 lot
-  const tick = +document.getElementById('tick').value || 0.01; // USD per oz per 1 point
+  const contract = +document.getElementById('contract').value || 100;
+  const tick = +document.getElementById('tick').value || 0.01;
+  const pipMode = document.getElementById('pipMode')?.checked || false;
+  const pipRaw = +document.getElementById('pipstep').value || 0;
+  const tpRaw = +document.getElementById('tp').value || 0;
+  const pipstep = pipMode ? (pipRaw * tick) : pipRaw;
+  const tp = pipMode ? (tpRaw * tick) : tpRaw;
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
@@ -177,49 +186,37 @@ function runCalc(){
     return;
   }
 
-  // ฟังก์ชันช่วยคำนวณ
-  const dir = (side==='buy') ? -1 : +1; // เดินราคาผิดทาง: buy → ลง, sell → ขึ้น
+  const dir = (side==='buy') ? -1 : +1;
   function priceAt(step){ return entry + dir * step * pipstep; }
-
-  function marginUsed(currentPrice, lots){
-    // สมมติ: margin = currentPrice * contract * lots / leverage
-    return currentPrice * contract * lots / lev;
-  }
-
+  function marginUsed(currentPrice, lots){ return currentPrice * contract * lots / lev; }
   function plFloating(currentPrice, entries){
-    // ผลรวมกำไร/ขาดทุนของแต่ละไม้ (ค่าบวก = กำไร)
     let pl=0;
     for(const e of entries){
-      const move = (currentPrice - e.price); // ถ้า buy แล้วลง จะติดลบ, ถ้า sell แล้วขึ้น จะติดลบ
-      const sign = (e.side==='buy')? +1 : -1; // P/L = (current - entry)*size*lot for buy; สำหรับ sell คูณ -1
+      const move = (currentPrice - e.price);
+      const sign = (e.side==='buy')? +1 : -1;
       pl += sign * move * contract * e.lot;
     }
     return pl;
   }
 
   let entries = [];
-  // step = 0 คือไม้แรก
   entries.push({price: entry, lot: lotAt(0,fixedLot,lotList), side});
 
   let liquidationStep = null;
-  const maxSteps = 2000; // ลิมิตเพื่อความปลอดภัย
+  const maxSteps = 2000;
 
   for(let step=0; step<=maxSteps; step++){
     if(step>0){
-      // เมื่อขยับไปอีก 1 pipstep ผิดทาง → เปิดไม้เพิ่ม
       const newPrice = priceAt(step);
       entries.push({price:newPrice, lot: lotAt(step,fixedLot,lotList), side});
     }
-
-    // สถานะ ณ ราคาปัจจุบัน (ผิดทางมาถึง step นี้แล้ว)
     const currentPrice = priceAt(step);
     const lotsSum = entries.reduce((s,e)=>s+e.lot,0);
     const margin = marginUsed(currentPrice, lotsSum);
     const pl = plFloating(currentPrice, entries);
     const equity = balance + pl;
-    const ml = equity / Math.max(margin,1e-9); // Margin Level (ratio)
+    const ml = equity / Math.max(margin,1e-9);
 
-    // เติมตาราง
     const tr=document.createElement('tr');
     function td(v){ const x=document.createElement('td'); x.textContent=v; return x; }
     tr.appendChild(td(step));
@@ -229,52 +226,7 @@ function runCalc(){
     tr.appendChild(td(fmt(margin,2)));
     tr.appendChild(td(fmt(pl,2)));
     tr.appendChild(td(fmt(equity,2)));
-    tr.appendChild(td((ml*100).toFixed(2) + '%'));
+    tr.appendChild(td((ml*100).toFixed(2)+'%'));
     tbody.appendChild(tr);
 
-    // เงื่อนไขล้าง: Margin Level ≤ Stop‑out%
-    if((ml) <= stopoutPct){ liquidationStep = step; break; }
-
-    // ถ้าอีเควตี้ติดลบจัด ๆ ก็หยุดป้องกันอินฟินิตี้
-    if(equity<=0){ liquidationStep = step; break; }
-  }
-
-  // สรุป
-  if(liquidationStep===null){
-    document.getElementById('statOrders').textContent = entries.length;
-    document.getElementById('statLiquid').textContent = 'ไม่ถึงจุดล้างภายใน '+maxSteps+' ขั้น';
-    document.getElementById('statLoss').textContent = '-';
-    document.getElementById('statLots').textContent = fmt(entries.reduce((s,e)=>s+e.lot,0),2);
-    document.getElementById('statMargin').textContent = '-';
-    document.getElementById('statML').textContent = '-';
-    return;
-  }
-
-  const L = liquidationStep;
-  const liquidPrice = priceAt(L);
-  const lotsSum = entries.slice(0,L+1).reduce((s,e)=>s+e.lot,0);
-  const margin = marginUsed(liquidPrice, lotsSum);
-  const pl = plFloating(liquidPrice, entries.slice(0,L+1));
-  const equity = balance + pl;
-  const ml = equity / Math.max(margin,1e-9);
-
-  document.getElementById('statOrders').textContent = (L+1); // รวมไม้แรก
-  document.getElementById('statLiquid').textContent = fmt(liquidPrice,2) + ' USD/oz';
-  document.getElementById('statLoss').textContent = fmt(-Math.min(pl,0),2);
-  document.getElementById('statLots').textContent = fmt(lotsSum,2);
-  document.getElementById('statMargin').textContent = fmt(margin,2);
-  document.getElementById('statML').textContent = (ml*100).toFixed(2)+'%';
-}
-
-// demo list (เช่น ไม้โต)
-document.getElementById('demoBtn').addEventListener('click',()=>{
-  document.getElementById('lotList').value = '0.10, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40';
-});
-
-document.getElementById('runBtn').addEventListener('click', runCalc);
-
-// คำนวณครั้งแรกด้วยค่าเริ่มต้น
-runCalc();
-</script>
-</body>
-</html>
+    if((ml) <= stopoutPct){ liquidationStep =
