@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Grid EA Liquidation & Drawdown Calculator (XAUUSD)</title>
+<title>Grid EA Multi-Asset Calculator (XAU, XAG, OIL)</title>
 <style>
   :root{--bg:#0f172a;--panel:#111827;--text:#e5e7eb;--muted:#9ca3af;--accent:#22c55e;--warn:#ef4444;--card:#0b1220;}
   *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;background:linear-gradient(180deg,#0b1220,#0f172a);} 
@@ -17,11 +17,13 @@
   .card h2{margin:0 0 14px;font-size:16px;color:var(--text)}
   .section{padding:16px}
   .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
-  label{color:var(--muted);font-size:12px}
+  label{color:var(--muted);font-size:12px;margin-bottom:4px;display:block}
   .field{display:flex;flex-direction:column;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);padding:10px;border-radius:10px}
   input,select{width:100%;background:#0d1426;border:1px solid rgba(255,255,255,.12);color:var(--text);border-radius:8px;padding:9px 10px;font-size:14px;outline:none}
+  input:focus, select:focus{border-color:var(--accent)}
   input::placeholder{color:#6b7280}
-  .btn{display:inline-block;background:var(--accent);color:#052e16;border:none;padding:12px 16px;border-radius:10px;font-weight:800;cursor:pointer}
+  .btn{display:inline-block;background:var(--accent);color:#052e16;border:none;padding:12px 16px;border-radius:10px;font-weight:800;cursor:pointer;transition:0.2s}
+  .btn:hover{filter:brightness(1.1)}
   .btn:disabled{opacity:.6;cursor:not-allowed}
   .btn-outline{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--text)}
   .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -30,12 +32,12 @@
   .stat h3{margin:0;color:var(--muted);font-weight:600;font-size:12px}
   .stat .v{margin-top:4px;font-weight:900;font-size:18px;color:var(--text)}
   .stat.warn{background:linear-gradient(180deg,rgba(239,68,68,.1),rgba(255,255,255,.02));border-color:rgba(239,68,68,.35)}
-  table{width:100%;border-collapse:collapse;font-size:13px;border-spacing:0;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;border-spacing:0}
   thead th{position:sticky;top:0;background:#0c1324;color:#9fb2d8}
   th,td{border-bottom:1px dashed rgba(255,255,255,.08);padding:8px 10px;text-align:right;color:var(--text)}
   th:first-child,td:first-child{text-align:left}
-  .muted{color:var(--muted)}
-  .footer{color:var(--muted);font-size:12px;padding:12px 16px}
+  .muted{color:var(--muted);font-size:11px;margin-top:4px}
+  .footer{color:var(--muted);font-size:12px;padding:12px 16px;text-align:center}
   .contactbox{margin-top:12px;padding:14px;border-radius:12px;background:linear-gradient(180deg,rgba(59,130,246,.09),rgba(255,255,255,.02));border:1px solid rgba(59,130,246,.35);}
   .contactbox h3{margin:0 0 6px;color:#cfe1ff;font-size:14px}
   .contactbox p{margin:6px 0;color:var(--text);font-size:13px}
@@ -45,126 +47,158 @@
 </head>
 <body>
   <header>
-    <h1>GridMasterTH EA: คำนวณการลาก / เปิดเพิ่ม / จุดล้างพอร์ต (XAUUSD)</h1>
-    <p class="subtitle">รองรับลอทคงที่ หรือกำหนดลิสต์ลอทเอง (เช่น 0.10,0.10,0.15,0.20,…). สูตรนี้ประมาณการตามมาตรฐานทั่วไป — 1 lot = 100 oz, tick = 0.01 USD/oz, margin = ราคา×สัญญา×ลอท ÷ เลเวอเรจ, Stop‑out ใช้ Margin Level.</p>
+    <h1>GridMasterTH: Multi-Asset Calculator</h1>
+    <p class="subtitle">คำนวณการลาก / จุดล้างพอร์ต สำหรับ ทองคำ (XAU), เงิน (XAG) และ น้ำมัน (OIL)</p>
   </header>
 
   <div class="container">
     <div class="grid">
       <div class="card section">
-        <h2>ตั้งค่าอินพุต</h2>
+        <h2>1. ตั้งค่าบัญชีและสินทรัพย์</h2>
         <div class="row">
-          <div class="field" style="grid-column: span 3;">
+          <div class="field" style="grid-column: span 6;">
+            <label>เลือกสินทรัพย์ (Asset)</label>
+            <select id="asset">
+              <option value="xau">Gold (XAUUSD)</option>
+              <option value="xag">Silver (XAGUSD)</option>
+              <option value="oil">Crude Oil (WTI/USOIL)</option>
+            </select>
+          </div>
+          <div class="field" style="grid-column: span 6;">
             <label>เงินทุน / Balance (USD)</label>
             <input id="balance" type="number" step="0.01" value="10000" />
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>เลเวอเรจ (เช่น 2000 = 1:2000)</label>
+          <div class="field" style="grid-column: span 4;">
+            <label>เลเวอเรจ (1:X)</label>
             <input id="leverage" type="number" step="1" value="2000" />
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>Stop‑out (%) — ระดับ Margin Level ที่โดนบังคับปิด</label>
+          <div class="field" style="grid-column: span 4;">
+            <label>Stop-out (%)</label>
             <input id="stopout" type="number" step="1" value="50" />
           </div>
-          <div class="field" style="grid-column: span 3;">
+          <div class="field" style="grid-column: span 4;">
             <label>ฝั่งที่เล่น</label>
             <select id="side">
-              <option value="buy">Buy</option>
-              <option value="sell">Sell</option>
+              <option value="buy">Buy (ลากลง)</option>
+              <option value="sell">Sell (ลากขึ้น)</option>
             </select>
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>ราคาเข้าไม้แรก (XAUUSD)</label>
+        </div>
+
+        <h2 style="margin-top:20px">2. ตั้งค่าการเทรด (Grid Setting)</h2>
+        <div class="row">
+          <div class="field" style="grid-column: span 6;">
+            <label>ราคาเข้าไม้แรก (Entry Price)</label>
             <input id="entry" type="number" step="0.01" value="2400.00" />
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>ระยะเปิดเพิ่ม Pipstep (จุดราคา หรือ จำนวนจุด)</label>
+          <div class="field" style="grid-column: span 6;">
+            <label>ระยะห่าง Grid (Pipstep)</label>
             <input id="pipstep" type="number" step="0.01" value="1000" />
             <div class="muted" id="pipConv">→ ระยะราคา: -</div>
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>TP ต่อไม้ (จุดราคา หรือ จำนวนจุด) — ใช้คำนวณกำไรต่อไม้ (ตัวเลือก)</label>
-            <input id="tp" type="number" step="0.01" value="1000" />
-            <div class="muted" id="tpConv">→ ระยะราคา: -</div>
-          </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>ลอทคงที่ต่อไม้ (ถ้าไม่ได้ใส่ลิสต์ลอท)</label>
+          <div class="field" style="grid-column: span 6;">
+            <label>ลอทคงที่ (Fixed Lot)</label>
             <input id="fixedLot" type="number" step="0.01" value="0.10" />
           </div>
           <div class="field" style="grid-column: span 6;">
-            <label>ลิสต์ลอทกำหนดเอง (คั่นด้วยคอมมา เช่น 0.10,0.10,0.15,0.20) — เว้นว่างเพื่อใช้ลอทคงที่</label>
-            <input id="lotList" type="text" placeholder="เช่น 0.10,0.10,0.15,0.20" />
+            <label>ลิสต์ลอทกำหนดเอง (Optional)</label>
+            <input id="lotList" type="text" placeholder="เช่น 0.1, 0.2, 0.4" />
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>ขนาดสัญญาต่อ 1.00 lot (oz) — ค่าเริ่มต้น 100</label>
+          
+          <div class="field" style="grid-column: span 6;">
+            <label>Contract Size (ต่อ 1 Lot)</label>
             <input id="contract" type="number" step="1" value="100" />
           </div>
-          <div class="field" style="grid-column: span 3;">
-            <label>ขนาด Tick/Point ของราคา (USD/oz) — XAU ทั่วไป 0.01</label>
-            <input id="tick" type="number" step="0.001" value="0.01" />
-          </div>
           <div class="field" style="grid-column: span 6;">
-            <label><input id="pipMode" type="checkbox" checked /> กรอก Pipstep/TP เป็นจำนวน <b>จุด (pip)</b></label>
-            <div class="muted">ตัวอย่าง: ถ้า tick=0.01 → 1000 จุด = 10.00 หน่วยราคา</div>
+            <label>Tick Size (Point Value)</label>
+            <input id="tick" type="number" step="0.0001" value="0.01" />
+          </div>
+
+          <div class="field" style="grid-column: span 12;">
+            <label><input id="pipMode" type="checkbox" checked /> กรอกระยะเป็น <b>จำนวนจุด (Pips/Points)</b></label>
           </div>
         </div>
+
         <div style="display:flex;gap:8px;margin-top:14px">
-          <button class="btn" id="runBtn">คำนวณ</button>
-          <button class="btn btn-outline" id="demoBtn">ใส่ตัวอย่างลิสต์ลอท Martingale</button>
+          <button class="btn" id="runBtn" style="flex:1">เริ่มคำนวณ</button>
+          <button class="btn btn-outline" id="demoBtn">ตัวอย่าง Martingale</button>
         </div>
       </div>
 
       <div class="card section">
-        <h2>สรุปผล</h2>
+        <h2>สรุปการคำนวณ</h2>
         <div class="stats" id="stats">
-          <div class="stat"><h3>จำนวนไม้ที่ถูกเปิดเพิ่ม (รวมไม้แรก)</h3><div class="v" id="statOrders">-</div></div>
-          <div class="stat warn"><h3>ราคาที่คาดว่าโดนล้าง (Stop‑out)</h3><div class="v" id="statLiquid">-</div></div>
-          <div class="stat"><h3>ขาดทุนลอยที่จุดล้าง (USD)</h3><div class="v" id="statLoss">-</div></div>
-          <div class="stat"><h3>รวมลอททั้งหมด</h3><div class="v" id="statLots">-</div></div>
-          <div class="stat"><h3>Margin ใช้อยู่ (ที่จุดล้าง)</h3><div class="v" id="statMargin">-</div></div>
-          <div class="stat"><h3>Margin Level (ที่จุดล้าง)</h3><div class="v" id="statML">-</div></div>
+          <div class="stat"><h3>ไม้ที่เปิดไหว (Max Orders)</h3><div class="v" id="statOrders">-</div></div>
+          <div class="stat warn"><h3>ราคาล้างพอร์ต (SO Price)</h3><div class="v" id="statLiquid">-</div></div>
+          <div class="stat"><h3>Drawdown สูงสุด ($)</h3><div class="v" id="statLoss">-</div></div>
+          <div class="stat"><h3>Total Lots</h3><div class="v" id="statLots">-</div></div>
+          <div class="stat"><h3>Margin ที่ใช้ ($)</h3><div class="v" id="statMargin">-</div></div>
+          <div class="stat"><h3>Final Margin Level</h3><div class="v" id="statML">-</div></div>
         </div>
-        <p class="footer">หมายเหตุ: การคำนวณนี้เป็น <span class="badge">การประมาณ</span> ตามสมมติฐานทั่วไปของ CFD XAUUSD — โบรกเกอร์จริงอาจมีสูตรมาร์จิน/สต็อปเอาท์ต่างกัน, ค่าสวอป/ค่าคอมมิชชันไม่รวม</p>
+        
         <div class="contactbox">
-          <h3>ข้อมูลบิลด์ & ช่องทางติดต่อ</h3>
-          <p><b>อัปเดตล่าสุด:</b> <span id="buildTime">-</span></p>
-          <p>ระบบนี้จัดทำโดย <b>GridMasterTH</b> — หากสนใจติดต่อได้ที่
-            <a href="https://www.facebook.com/groups/1507363437265560" target="_blank" rel="noopener">Facebook Group</a>
+          <h3>ข้อมูล & ติดต่อ</h3>
+          <p><b>อัปเดตระบบ:</b> <span id="buildTime">-</span></p>
+          <p>จัดทำโดย <b>GridMasterTH</b> — 
+            <a href="https://www.facebook.com/groups/1507363437265560" target="_blank">Facebook Group</a>
           </p>
         </div>
+        <p class="muted">หมายเหตุ: ผลลัพธ์เป็นการประมาณการเชิงคณิตศาสตร์ ไม่รวมค่า Swap และ Commission ของแต่ละโบรกเกอร์</p>
       </div>
     </div>
 
     <div class="card section" style="margin-top:16px;overflow:auto">
-      <h2>ไทม์ไลน์การลากผิดทาง (คำนวณทีละ Pipstep)</h2>
-      <div class="muted" style="margin-bottom:8px">หยุดที่ขั้นแรกที่ Margin Level ≤ Stop‑out%</div>
-      <div style="overflow:auto">
-        <table id="table"><thead><tr>
-          <th>#Step</th>
-          <th>ราคา ณ ขั้น</th>
-          <th>เปิดกี่ไม้</th>
-          <th>ลอทรวม</th>
-          <th>มาร์จินใช้</th>
-          <th>กำไร/ขาดทุนลอย</th>
-          <th>อีเควตี้</th>
-          <th>Margin Level</th>
-        </tr></thead><tbody id="tbody"></tbody></table>
-      </div>
+      <h2>ไทม์ไลน์การลาก (Step-by-Step)</h2>
+      <table id="table">
+        <thead>
+          <tr>
+            <th>#Step</th>
+            <th>ราคา</th>
+            <th>ไม้</th>
+            <th>ลอทรวม</th>
+            <th>มาร์จิน</th>
+            <th>P/L รวม</th>
+            <th>Equity</th>
+            <th>Margin Level</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
 
-    <div class="footer">© Grid EA Helper — จัดทำโดย GridMasterTH https://www.facebook.com/groups/1507363437265560;.</div>
+    <div class="footer">© Grid EA Helper — Created for Community</div>
   </div>
 
 <script>
+// ข้อมูลตั้งค่าพื้นฐานของแต่ละสินทรัพย์
+const assetPresets = {
+  xau: { contract: 100, tick: 0.01, entry: 2400.00, pipstep: 1000 },
+  xag: { contract: 5000, tick: 0.01, entry: 28.00, pipstep: 100 },
+  oil: { contract: 1000, tick: 0.01, entry: 80.00, pipstep: 100 }
+};
+
 function fmt(n, d=2){
   if(!isFinite(n)) return '-';
   return Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
 }
+
+// อัปเดตค่าเมื่อเปลี่ยนสินทรัพย์
+document.getElementById('asset').addEventListener('change', function(e) {
+  const p = assetPresets[e.target.value];
+  document.getElementById('contract').value = p.contract;
+  document.getElementById('tick').value = p.tick;
+  document.getElementById('entry').value = p.entry;
+  document.getElementById('pipstep').value = p.pipstep;
+  updateConvHints();
+  runCalc();
+});
+
 function parseLotList(txt){
   if(!txt) return null;
   const arr = txt.split(/[,\s]+/).map(s=>parseFloat(s)).filter(v=>!isNaN(v)&&v>0);
   return arr.length?arr:null;
 }
+
 function lotAt(i, fixedLot, lotList){
   if(lotList && lotList.length){
     if(i < lotList.length) return lotList[i];
@@ -185,124 +219,93 @@ function runCalc(){
   const tick = +document.getElementById('tick').value || 0.01;
   const pipMode = document.getElementById('pipMode')?.checked || false;
   const pipRaw = +document.getElementById('pipstep').value || 0;
-  const tpRaw = +document.getElementById('tp').value || 0;
   const pipstep = pipMode ? (pipRaw * tick) : pipRaw;
-  const tp = pipMode ? (tpRaw * tick) : tpRaw;
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
   if(balance<=0 || entry<=0 || pipstep<=0 || contract<=0 || lev<=0){
-    alert('กรอกข้อมูลให้ถูกต้อง: balance, entry, pipstep, contract, leverage ต้อง > 0');
     return;
   }
 
-  const dir = (side==='buy') ? -1 : +1; // เดินราคาผิดทาง
-  function priceAt(step){ return entry + dir * step * pipstep; }
-  function marginUsed(currentPrice, lots){ return currentPrice * contract * lots / lev; }
-  function plFloating(currentPrice, entries){
-    let pl=0;
-    for(const e of entries){
-      const move = (currentPrice - e.price);
-      const sign = (e.side==='buy')? +1 : -1;
-      pl += sign * move * contract * e.lot;
-    }
-    return pl;
-  }
-
+  const dir = (side==='buy') ? -1 : +1; 
   let entries = [];
-  entries.push({price: entry, lot: lotAt(0,fixedLot,lotList), side});
+  entries.push({price: entry, lot: lotAt(0,fixedLot,lotList)});
 
   let liquidationStep = null;
-  const maxSteps = 2000;
+  const maxSteps = 1000;
 
   for(let step=0; step<=maxSteps; step++){
-    if(step>0){
-      const newPrice = priceAt(step);
-      entries.push({price:newPrice, lot: lotAt(step,fixedLot,lotList), side});
+    const currentPrice = entry + (dir * step * pipstep);
+    
+    if(step > 0){
+      entries.push({price: currentPrice, lot: lotAt(step,fixedLot,lotList)});
     }
 
-    const currentPrice = priceAt(step);
     const lotsSum = entries.reduce((s,e)=>s+e.lot,0);
-    const margin = marginUsed(currentPrice, lotsSum);
-    const pl = plFloating(currentPrice, entries);
+    const margin = currentPrice * contract * lotsSum / lev;
+    
+    let pl = 0;
+    for(const e of entries){
+      const move = (currentPrice - e.price);
+      pl += (side==='buy' ? 1 : -1) * move * contract * e.lot;
+    }
+    
     const equity = balance + pl;
-    const ml = equity / Math.max(margin,1e-9);
+    const ml = equity / Math.max(margin, 1e-9);
 
-    const tr=document.createElement('tr');
-    function td(v){ const x=document.createElement('td'); x.textContent=v; return x; }
-    tr.appendChild(td(step));
-    tr.appendChild(td(fmt(currentPrice,2)));
-    tr.appendChild(td(entries.length));
-    tr.appendChild(td(fmt(lotsSum,2)));
-    tr.appendChild(td(fmt(margin,2)));
-    tr.appendChild(td(fmt(pl,2)));
-    tr.appendChild(td(fmt(equity,2)));
-    tr.appendChild(td((ml*100).toFixed(2)+'%'));
+    // สร้างแถวตาราง
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${step}</td>
+      <td>${fmt(currentPrice, 2)}</td>
+      <td>${entries.length}</td>
+      <td>${fmt(lotsSum, 2)}</td>
+      <td>${fmt(margin, 2)}</td>
+      <td style="color:${pl<0?'#ef4444':'#22c55e'}">${fmt(pl, 2)}</td>
+      <td>${fmt(equity, 2)}</td>
+      <td style="color:${ml<=stopoutPct?'#ef4444':''}">${(ml*100).toFixed(1)}%</td>
+    `;
     tbody.appendChild(tr);
 
     if(ml <= stopoutPct || equity <= 0){
       liquidationStep = step;
+      document.getElementById('statOrders').textContent = step + 1;
+      document.getElementById('statLiquid').textContent = fmt(currentPrice, 2);
+      document.getElementById('statLoss').textContent = fmt(Math.abs(pl), 2);
+      document.getElementById('statLots').textContent = fmt(lotsSum, 2);
+      document.getElementById('statMargin').textContent = fmt(margin, 2);
+      document.getElementById('statML').textContent = (ml*100).toFixed(2)+'%';
       break;
     }
   }
-
-  if(liquidationStep===null){
-    document.getElementById('statOrders').textContent = entries.length;
-    document.getElementById('statLiquid').textContent = 'ไม่ถึงจุดล้างภายใน '+maxSteps+' ขั้น';
-    document.getElementById('statLoss').textContent = '-';
-    document.getElementById('statLots').textContent = fmt(entries.reduce((s,e)=>s+e.lot,0),2);
-    document.getElementById('statMargin').textContent = '-';
-    document.getElementById('statML').textContent = '-';
-    return;
-  }
-
-  const L = liquidationStep;
-  const liquidPrice = priceAt(L);
-  const lotsSum = entries.slice(0,L+1).reduce((s,e)=>s+e.lot,0);
-  const margin = marginUsed(liquidPrice, lotsSum);
-  const pl = plFloating(liquidPrice, entries.slice(0,L+1));
-  const equity = balance + pl;
-  const ml = equity / Math.max(margin,1e-9);
-
-  document.getElementById('statOrders').textContent = (L+1);
-  document.getElementById('statLiquid').textContent = fmt(liquidPrice,2) + ' USD/oz';
-  document.getElementById('statLoss').textContent = fmt(-Math.min(pl,0),2);
-  document.getElementById('statLots').textContent = fmt(lotsSum,2);
-  document.getElementById('statMargin').textContent = fmt(margin,2);
-  document.getElementById('statML').textContent = (ml*100).toFixed(2)+'%';
 }
 
-// hints แปลงหน่วย pip ↔ ระยะราคา
 function updateConvHints(){
   const tick = +document.getElementById('tick').value || 0.01;
   const pipMode = document.getElementById('pipMode')?.checked || false;
   const pipRaw = +document.getElementById('pipstep').value || 0;
-  const tpRaw = +document.getElementById('tp').value || 0;
   const pipConvEl = document.getElementById('pipConv');
-  const tpConvEl = document.getElementById('tpConv');
-  if(pipConvEl){ pipConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(pipRaw*tick,2)}` : (tick>0? `→ จำนวนจุด: ${fmt(pipRaw/tick,0)}` : ''); }
-  if(tpConvEl){ tpConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(tpRaw*tick,2)}` : (tick>0? `→ จำนวนจุด: ${fmt(tpRaw/tick,0)}` : ''); }
+  if(pipConvEl){ 
+    pipConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(pipRaw*tick, 3)}` : `→ จำนวนจุด: ${fmt(pipRaw/tick, 0)}`; 
+  }
 }
-['pipstep','tp','tick','pipMode'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input', updateConvHints); }});
 
-// ปุ่มตัวอย่างลิสต์ลอท
-const demoBtn = document.getElementById('demoBtn');
-if(demoBtn){ demoBtn.addEventListener('click',()=>{ document.getElementById('lotList').value = '0.10, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40'; }); }
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', () => {
+    updateConvHints();
+    runCalc();
+  });
+});
 
-// ปุ่มคำนวณ
-const runBtn = document.getElementById('runBtn');
-if(runBtn){ runBtn.addEventListener('click', ()=>{ updateConvHints(); runCalc(); }); }
+document.getElementById('demoBtn').addEventListener('click',()=>{ 
+  document.getElementById('lotList').value = '0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64'; 
+  runCalc();
+});
 
-// เริ่มต้น
-function setBuildInfo(){
-  try{
-    const t=new Date(document.lastModified);
-    document.getElementById('buildTime').textContent = t.toLocaleString();
-  }catch(e){}
-}
+// Init
 updateConvHints();
-setBuildInfo();
+document.getElementById('buildTime').textContent = new Date().toLocaleString();
 runCalc();
 </script>
 </body>
