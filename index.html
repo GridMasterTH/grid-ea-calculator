@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Grid EA Multi-Asset Calculator (XAU, XAG, OIL)</title>
+<title>Grid EA Multi-Asset Calculator (XAU, XAG, OIL, XNG)</title>
 <style>
   :root{--bg:#0f172a;--panel:#111827;--text:#e5e7eb;--muted:#9ca3af;--accent:#22c55e;--warn:#ef4444;--card:#0b1220;}
   *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;background:linear-gradient(180deg,#0b1220,#0f172a);} 
@@ -48,7 +48,7 @@
 <body>
   <header>
     <h1>GridMasterTH: Multi-Asset Calculator</h1>
-    <p class="subtitle">คำนวณการลาก / จุดล้างพอร์ต สำหรับ ทองคำ (XAU), เงิน (XAG) และ น้ำมัน (OIL)</p>
+    <p class="subtitle">คำนวณการลาก / จุดล้างพอร์ต สำหรับ ทองคำ (XAU), เงิน (XAG), น้ำมัน (OIL) และ ก๊าซธรรมชาติ (XNG)</p>
   </header>
 
   <div class="container">
@@ -62,6 +62,7 @@
               <option value="xau">Gold (XAUUSD)</option>
               <option value="xag">Silver (XAGUSD)</option>
               <option value="oil">Crude Oil (WTI/USOIL)</option>
+              <option value="xng">Natural Gas (XNGUSD)</option>
             </select>
           </div>
           <div class="field" style="grid-column: span 6;">
@@ -89,7 +90,7 @@
         <div class="row">
           <div class="field" style="grid-column: span 6;">
             <label>ราคาเข้าไม้แรก (Entry Price)</label>
-            <input id="entry" type="number" step="0.01" value="2400.00" />
+            <input id="entry" type="number" step="0.001" value="2400.00" />
           </div>
           <div class="field" style="grid-column: span 6;">
             <label>ระยะห่าง Grid (Pipstep)</label>
@@ -170,11 +171,12 @@
   </div>
 
 <script>
-// ข้อมูลตั้งค่าพื้นฐานของแต่ละสินทรัพย์
+// ข้อมูลตั้งค่าพื้นฐานของแต่ละสินทรัพย์ (เพิ่ม XNG)
 const assetPresets = {
   xau: { contract: 100, tick: 0.01, entry: 2400.00, pipstep: 1000 },
   xag: { contract: 5000, tick: 0.01, entry: 28.00, pipstep: 100 },
-  oil: { contract: 1000, tick: 0.01, entry: 80.00, pipstep: 100 }
+  oil: { contract: 1000, tick: 0.01, entry: 80.00, pipstep: 100 },
+  xng: { contract: 10000, tick: 0.001, entry: 3.225, pipstep: 100 }
 };
 
 function fmt(n, d=2){
@@ -207,6 +209,12 @@ function lotAt(i, fixedLot, lotList){
   return fixedLot;
 }
 
+// หาจำนวนทศนิยมอัตโนมัติจาก Tick Size (เช่น 0.001 = 3 ตำแหน่ง)
+function getPriceDecimals() {
+  const tickStr = document.getElementById('tick').value || "0.01";
+  return tickStr.includes('.') ? tickStr.split('.')[1].length : 0;
+}
+
 function runCalc(){
   const balance = +document.getElementById('balance').value || 0;
   const lev = +document.getElementById('leverage').value || 1;
@@ -220,6 +228,8 @@ function runCalc(){
   const pipMode = document.getElementById('pipMode')?.checked || false;
   const pipRaw = +document.getElementById('pipstep').value || 0;
   const pipstep = pipMode ? (pipRaw * tick) : pipRaw;
+  
+  const priceDec = getPriceDecimals(); // คำนวณทศนิยมที่ต้องใช้แสดงผลราคา
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
@@ -254,11 +264,11 @@ function runCalc(){
     const equity = balance + pl;
     const ml = equity / Math.max(margin, 1e-9);
 
-    // สร้างแถวตาราง
+    // สร้างแถวตาราง (ปรับให้ใช้ทศนิยมราคาแบบไดนามิก - priceDec)
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${step}</td>
-      <td>${fmt(currentPrice, 2)}</td>
+      <td>${fmt(currentPrice, priceDec)}</td>
       <td>${entries.length}</td>
       <td>${fmt(lotsSum, 2)}</td>
       <td>${fmt(margin, 2)}</td>
@@ -271,7 +281,7 @@ function runCalc(){
     if(ml <= stopoutPct || equity <= 0){
       liquidationStep = step;
       document.getElementById('statOrders').textContent = step + 1;
-      document.getElementById('statLiquid').textContent = fmt(currentPrice, 2);
+      document.getElementById('statLiquid').textContent = fmt(currentPrice, priceDec);
       document.getElementById('statLoss').textContent = fmt(Math.abs(pl), 2);
       document.getElementById('statLots').textContent = fmt(lotsSum, 2);
       document.getElementById('statMargin').textContent = fmt(margin, 2);
@@ -285,9 +295,11 @@ function updateConvHints(){
   const tick = +document.getElementById('tick').value || 0.01;
   const pipMode = document.getElementById('pipMode')?.checked || false;
   const pipRaw = +document.getElementById('pipstep').value || 0;
+  const priceDec = getPriceDecimals();
+  
   const pipConvEl = document.getElementById('pipConv');
   if(pipConvEl){ 
-    pipConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(pipRaw*tick, 3)}` : `→ จำนวนจุด: ${fmt(pipRaw/tick, 0)}`; 
+    pipConvEl.textContent = pipMode ? `→ ระยะราคา: ${fmt(pipRaw*tick, priceDec)}` : `→ จำนวนจุด: ${fmt(pipRaw/tick, 0)}`; 
   }
 }
 
@@ -305,7 +317,7 @@ document.getElementById('demoBtn').addEventListener('click',()=>{
 
 // Init
 updateConvHints();
-document.getElementById('buildTime').textContent = new Date().toLocaleString();
+document.getElementById('buildTime').textContent = new Date().toLocaleString('th-TH');
 runCalc();
 </script>
 </body>
