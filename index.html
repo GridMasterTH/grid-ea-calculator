@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Grid EA Multi-Asset Calculator (Fast Optimized)</title>
+<title>Grid EA Multi-Asset & Stuck Orders Calculator</title>
 <style>
   :root{--bg:#0f172a;--panel:#111827;--text:#e5e7eb;--muted:#9ca3af;--accent:#22c55e;--warn:#ef4444;--card:#0b1220;--blue:#3b82f6;}
   *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Noto Sans',sans-serif;background:linear-gradient(180deg,#0b1220,#0f172a);} 
@@ -11,10 +11,10 @@
   h1{margin:0 0 6px;font-size:22px;font-weight:800;letter-spacing:.2px}
   p.subtitle{margin:0;color:var(--muted);font-size:13px}
   .container{max-width:1100px;margin:0 auto;padding:18px}
-  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+  .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
   @media (max-width:980px){.grid{grid-template-columns:1fr;}}
   .card{background:rgba(255,255,255,0.04);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.08);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
-  .card h2{margin:0 0 14px;font-size:16px;color:var(--text)}
+  .card h2{margin:0 0 14px;font-size:16px;color:var(--text); display: flex; justify-content: space-between; align-items: center;}
   .section{padding:16px}
   .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
   label{color:var(--muted);font-size:12px;margin-bottom:4px;display:block}
@@ -23,16 +23,29 @@
   input:focus, select:focus{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
   input::placeholder{color:#6b7280}
   input[type="checkbox"]{width:auto; cursor:pointer;}
-  .btn{display:inline-block;background:var(--accent);color:#052e16;border:none;padding:12px 16px;border-radius:10px;font-weight:800;cursor:pointer;transition:0.2s}
+  .btn{display:inline-block;background:var(--accent);color:#052e16;border:none;padding:12px 16px;border-radius:10px;font-weight:800;cursor:pointer;transition:0.2s;font-size:14px}
+  .btn-sm{padding:6px 10px; font-size:12px; border-radius:6px;}
   .btn:hover{filter:brightness(1.1)}
   .btn:active{transform:scale(0.98)}
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .btn-outline{background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--text)}
+  
+  /* Stuck Orders UI */
+  .stuck-container{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  .stuck-row{display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.03);padding:8px;border-radius:8px;border:1px dashed rgba(255,255,255,.15);}
+  @media (max-width:480px){.stuck-row{flex-wrap:wrap;}}
+  .stuck-row > div{flex:1;min-width:70px;}
+  .stuck-row .col-btn{flex:0 0 auto;}
+  .btn-remove{background:var(--warn);color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:bold;cursor:pointer;}
+  
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
   @media (max-width:640px){.stats{grid-template-columns:1fr}}
   .stat{background:linear-gradient(180deg,rgba(34,197,94,.08),rgba(255,255,255,.02));border:1px solid rgba(34,197,94,.2);padding:12px;border-radius:12px}
   .stat h3{margin:0;color:var(--muted);font-weight:600;font-size:12px}
   .stat .v{margin-top:4px;font-weight:900;font-size:18px;color:var(--text)}
   .stat.warn{background:linear-gradient(180deg,rgba(239,68,68,.1),rgba(255,255,255,.02));border-color:rgba(239,68,68,.35)}
   .stat.blue{background:linear-gradient(180deg,rgba(59,130,246,.1),rgba(255,255,255,.02));border-color:rgba(59,130,246,.35)}
+  .stat.purple{background:linear-gradient(180deg,rgba(168,85,247,.1),rgba(255,255,255,.02));border-color:rgba(168,85,247,.35)}
+  
   table{width:100%;border-collapse:collapse;font-size:13px;border-spacing:0}
   thead th{position:sticky;top:0;background:#0c1324;color:#9fb2d8;z-index:10;box-shadow:0 1px 0 rgba(255,255,255,0.1)}
   th,td{border-bottom:1px dashed rgba(255,255,255,.08);padding:8px 10px;text-align:right;color:var(--text)}
@@ -43,132 +56,143 @@
 </head>
 <body>
   <header>
-    <h1>GridMasterTH: Multi-Asset & Range Calculator</h1>
-    <p class="subtitle">คำนวณการลาก / จุดล้างพอร์ต พร้อมฟังก์ชันหยุดเปิดไม้เมื่อหลุดกรอบราคา</p>
+    <h1>GridMasterTH: Multi-Asset Calculator</h1>
+    <p class="subtitle">คำนวณลาก / จุดล้างพอร์ต (รองรับระบบไม้เก่าค้างพอร์ต & กรอบราคา)</p>
   </header>
 
   <div class="container">
     <div class="grid">
-      <div class="card section">
-        <h2>1. ตั้งค่าบัญชีและสินทรัพย์</h2>
-        <div class="row">
-          <div class="field" style="grid-column: span 6;">
-            <label>เลือกสินทรัพย์ (Asset)</label>
-            <select id="asset">
-              <option value="custom">กำหนดเอง (Custom)</option>
-              <option value="xau">Gold (XAUUSD)</option>
-              <option value="xag">Silver (XAGUSD)</option>
-              <option value="oil">Crude Oil (WTI/USOIL)</option>
-              <option value="xng">Natural Gas (XNGUSD)</option>
-            </select>
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label>เงินทุน / Balance (USD)</label>
-            <input id="balance" type="number" step="0.01" value="10000" />
-          </div>
-          <div class="field" style="grid-column: span 4;">
-            <label>เลเวอเรจ (1:X)</label>
-            <input id="leverage" type="number" step="1" value="2000" />
-          </div>
-          <div class="field" style="grid-column: span 4;">
-            <label>Stop-out (%)</label>
-            <input id="stopout" type="number" step="1" value="50" />
-          </div>
-          <div class="field" style="grid-column: span 4;">
-            <label>ฝั่งที่เล่น</label>
-            <select id="side">
-              <option value="buy">Buy (ลากลง)</option>
-              <option value="sell">Sell (ลากขึ้น)</option>
-            </select>
-          </div>
-        </div>
-
-        <h2 style="margin-top:20px">2. ตั้งค่าการเทรด (Grid Setting)</h2>
-        <div class="row">
-          <div class="field" style="grid-column: span 6;">
-            <label>ราคาเข้าไม้แรก (Entry Price)</label>
-            <input id="entry" type="number" step="0.001" value="4100.00" />
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label>ระยะห่าง Grid (Pipstep)</label>
-            <input id="pipstep" type="number" step="0.01" value="1000" />
-            <div class="muted" id="pipConv">→ ระยะราคา: -</div>
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label>ลอทคงที่ (Fixed Lot)</label>
-            <input id="fixedLot" type="number" step="0.01" min="0.01" value="0.10" />
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label>ลิสต์ลอทกำหนดเอง (Optional)</label>
-            <input id="lotList" type="text" placeholder="เว้นว่างไว้เพื่อใช้ Fixed Lot" />
-          </div>
-
-          <div class="field" style="grid-column: span 12; flex-direction: row; align-items: center; gap: 8px; background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3);">
-            <input id="useRange" type="checkbox" checked />
-            <label style="margin:0; font-size:14px; color:#93c5fd; font-weight: 600;">หยุดเปิดไม้เมื่อหลุดกรอบราคา (Grid Range)</label>
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label style="color:#93c5fd;">กรอบบน (Upper Bound)</label>
-            <input id="upperBound" type="number" step="0.001" value="4100" />
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label style="color:#93c5fd;">กรอบล่าง (Lower Bound)</label>
-            <input id="lowerBound" type="number" step="0.001" value="4000" />
-          </div>
-
-          <div class="field" style="grid-column: span 6;">
-            <label>Contract Size (ต่อ 1 Lot)</label>
-            <input id="contract" type="number" step="1" value="100" />
-          </div>
-          <div class="field" style="grid-column: span 6;">
-            <label>Tick Size (Point Value)</label>
-            <input id="tick" type="number" step="0.0001" value="0.01" />
-          </div>
-
-          <div class="field" style="grid-column: span 12;">
-            <label><input id="pipMode" type="checkbox" checked /> กรอกระยะเป็น <b>จำนวนจุด (Pips/Points)</b></label>
+      <!-- ฝั่งซ้าย: ตั้งค่าต่างๆ -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card section">
+          <h2>1. ตั้งค่าบัญชีและสินทรัพย์</h2>
+          <div class="row">
+            <div class="field" style="grid-column: span 6;">
+              <label>เลือกสินทรัพย์ (Asset)</label>
+              <select id="asset">
+                <option value="custom">กำหนดเอง (Custom)</option>
+                <option value="xau">Gold (XAUUSD)</option>
+                <option value="xag">Silver (XAGUSD)</option>
+                <option value="oil">Crude Oil (WTI/USOIL)</option>
+                <option value="xng">Natural Gas (XNGUSD)</option>
+              </select>
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label>เงินทุนรวม / Balance (USD)</label>
+              <input id="balance" type="number" step="0.01" value="10000" />
+            </div>
+            <div class="field" style="grid-column: span 4;">
+              <label>เลเวอเรจ (1:X)</label>
+              <input id="leverage" type="number" step="1" value="2000" />
+            </div>
+            <div class="field" style="grid-column: span 4;">
+              <label>Stop-out (%)</label>
+              <input id="stopout" type="number" step="1" value="50" />
+            </div>
+            <div class="field" style="grid-column: span 4;">
+              <label>ฝั่งที่เล่น (Grid ใหม่)</label>
+              <select id="side">
+                <option value="buy">Buy (ลากลง)</option>
+                <option value="sell">Sell (ลากขึ้น)</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div style="display:flex;gap:8px;margin-top:14px">
-          <button class="btn" id="runBtn" style="flex:1">คำนวณใหม่ (อัปเดตอัตโนมัติแล้ว)</button>
+        <div class="card section">
+          <h2>2. ตั้งค่าการเทรดชุดใหม่ (New Grid Setting)</h2>
+          <div class="row">
+            <div class="field" style="grid-column: span 6;">
+              <label>ราคาเข้าไม้แรก (Entry Price)</label>
+              <input id="entry" type="number" step="0.001" value="4100.00" />
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label>ระยะห่าง Grid (Pipstep)</label>
+              <input id="pipstep" type="number" step="0.01" value="1000" />
+              <div class="muted" id="pipConv">→ ระยะราคา: -</div>
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label>ลอทคงที่ (Fixed Lot)</label>
+              <input id="fixedLot" type="number" step="0.01" min="0.01" value="0.10" />
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label>ลิสต์ลอทกำหนดเอง (Optional)</label>
+              <input id="lotList" type="text" placeholder="เว้นว่างไว้เพื่อใช้ Fixed Lot" />
+            </div>
+
+            <!-- กรอบราคา -->
+            <div class="field" style="grid-column: span 12; flex-direction: row; align-items: center; gap: 8px; background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3);">
+              <input id="useRange" type="checkbox" checked />
+              <label style="margin:0; font-size:14px; color:#93c5fd; font-weight: 600;">หยุดเปิดไม้เมื่อหลุดกรอบราคา (Grid Range)</label>
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label style="color:#93c5fd;">กรอบบน (Upper Bound)</label>
+              <input id="upperBound" type="number" step="0.001" value="4100" />
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label style="color:#93c5fd;">กรอบล่าง (Lower Bound)</label>
+              <input id="lowerBound" type="number" step="0.001" value="4000" />
+            </div>
+
+            <div class="field" style="grid-column: span 6;">
+              <label>Contract Size (ต่อ 1 Lot)</label>
+              <input id="contract" type="number" step="1" value="100" />
+            </div>
+            <div class="field" style="grid-column: span 6;">
+              <label>Tick Size (Point Value)</label>
+              <input id="tick" type="number" step="0.0001" value="0.01" />
+            </div>
+            <div class="field" style="grid-column: span 12;">
+              <label><input id="pipMode" type="checkbox" checked /> กรอกระยะเป็น <b>จำนวนจุด (Pips/Points)</b></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card section" style="border-color: rgba(168,85,247,.35); background: linear-gradient(180deg, rgba(168,85,247,0.03), rgba(255,255,255,0.02));">
+          <h2>
+            3. ไม้เดิมที่ค้างอยู่ (Stuck Orders)
+            <button class="btn btn-outline btn-sm" id="addStuckBtn">+ เพิ่มไม้</button>
+          </h2>
+          <p class="muted" style="margin-top:-10px; margin-bottom:12px;">ไม้พวกนี้จะถูกนำไปคิด Margin ดึงพอร์ต และการติดลบรวมกับไม้ชุดใหม่</p>
+          <div id="stuckContainer" class="stuck-container">
+            <!-- ไม้ที่ค้างจะถูกเพิ่มตรงนี้ -->
+          </div>
         </div>
       </div>
 
-      <div class="card section">
-        <h2>สรุปการคำนวณ</h2>
-        <div class="stats" id="stats">
-          <div class="stat blue"><h3>ไม้ที่เปิดไหว (Max Orders)</h3><div class="v" id="statOrders">-</div></div>
-          <div class="stat warn"><h3>ราคาล้างพอร์ต (SO Price)</h3><div class="v" id="statLiquid">-</div></div>
-          <div class="stat"><h3>Drawdown สูงสุด ($)</h3><div class="v" id="statLoss">-</div></div>
-          <div class="stat"><h3>ระยะที่ลากได้ (ราคา)</h3><div class="v" id="statDrag">-</div></div>
-          <div class="stat"><h3>Total Lots รวม</h3><div class="v" id="statLots">-</div></div>
-          <div class="stat"><h3>Margin ที่ใช้ ($)</h3><div class="v" id="statMargin">-</div></div>
+      <!-- ฝั่งขวา: สรุปและตาราง -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card section">
+          <h2>สรุปการคำนวณ (รวมไม้เก่า+ใหม่)</h2>
+          <div class="stats" id="stats">
+            <div class="stat warn"><h3>ราคาล้างพอร์ต (SO Price)</h3><div class="v" id="statLiquid">-</div></div>
+            <div class="stat blue"><h3>ไม้ Grid ที่เปิดได้ (New Orders)</h3><div class="v" id="statOrders">-</div></div>
+            <div class="stat purple"><h3>Total Lots รวมทั้งหมด</h3><div class="v" id="statLots">-</div></div>
+            <div class="stat"><h3>Margin รวมที่ใช้ ($)</h3><div class="v" id="statMargin">-</div></div>
+            <div class="stat" style="grid-column: span 2;"><h3>ระยะที่ทนลากได้จากไม้แรก (ราคา)</h3><div class="v" id="statDrag">-</div></div>
+          </div>
         </div>
-        
-        <p class="muted" style="margin-top:20px;">หมายเหตุ: หากติ๊ก "หยุดเปิดไม้เมื่อหลุดกรอบ" ระบบจะหยุดเพิ่มออเดอร์เมื่อราคาอยู่นอกกรอบ แต่จะจำลองการลากพอร์ตต่อไปจนกว่าจะล้างพอร์ต เพื่อหาเป้าหมายราคาที่เป็นอันตราย</p>
+
+        <div class="card section" style="overflow:auto; max-height: 650px;">
+          <h2>ไทม์ไลน์การลากพอร์ต</h2>
+          <table id="table">
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>ราคาปัจจุบัน</th>
+                <th>ไม้ใหม่</th>
+                <th>ลอทรวมทั้งหมด</th>
+                <th>มาร์จินรวม</th>
+                <th>P/L รวม</th>
+                <th>Equity</th>
+                <th>Margin Level</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
-
-    <div class="card section" style="margin-top:16px;overflow:auto; max-height: 600px;">
-      <h2>ไทม์ไลน์การลาก (Step-by-Step)</h2>
-      <table id="table">
-        <thead>
-          <tr>
-            <th>#Step</th>
-            <th>ราคา</th>
-            <th>จำนวนไม้</th>
-            <th>ลอทรวม</th>
-            <th>มาร์จิน</th>
-            <th>P/L รวม</th>
-            <th>Equity</th>
-            <th>Margin Level</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-
     <div class="footer">© Grid EA Helper — Created for Community</div>
   </div>
 
@@ -181,10 +205,73 @@ const assetPresets = {
   xng: { contract: 10000, tick: 0.001, entry: 3.225, pipstep: 100 }
 };
 
+let calcTimeout;
+
 function fmt(n, d=2){
   if(!isFinite(n)) return '-';
   return Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
 }
+
+function getPriceDecimals() {
+  const tickStr = document.getElementById('tick').value || "0.01";
+  return tickStr.includes('.') ? tickStr.split('.')[1].length : 0;
+}
+
+// ---------------- STUCK ORDERS LOGIC ---------------- //
+const stuckContainer = document.getElementById('stuckContainer');
+
+function addStuckOrder(type='buy', price='', lot='') {
+  const row = document.createElement('div');
+  row.className = 'stuck-row';
+  row.innerHTML = `
+    <div>
+      <select class="s-type" style="padding:6px; font-size:13px;">
+        <option value="buy" ${type==='buy'?'selected':''}>Buy</option>
+        <option value="sell" ${type==='sell'?'selected':''}>Sell</option>
+      </select>
+    </div>
+    <div>
+      <input class="s-price" type="number" step="0.001" placeholder="ราคาเข้า" value="${price}" style="padding:6px; font-size:13px;" />
+    </div>
+    <div>
+      <input class="s-lot" type="number" step="0.01" min="0.01" placeholder="Lot" value="${lot}" style="padding:6px; font-size:13px;" />
+    </div>
+    <div class="col-btn">
+      <button class="btn-remove">X</button>
+    </div>
+  `;
+  
+  // Event listeners for dynamic row
+  row.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', scheduleCalc);
+  });
+  row.querySelector('.btn-remove').addEventListener('click', () => {
+    row.remove();
+    scheduleCalc();
+  });
+
+  stuckContainer.appendChild(row);
+  scheduleCalc();
+}
+
+document.getElementById('addStuckBtn').addEventListener('click', () => {
+  addStuckOrder('buy', '', '0.10'); // Default empty
+});
+
+function getStuckOrders() {
+  const orders = [];
+  document.querySelectorAll('.stuck-row').forEach(row => {
+    const type = row.querySelector('.s-type').value;
+    const price = parseFloat(row.querySelector('.s-price').value);
+    const lot = parseFloat(row.querySelector('.s-lot').value);
+    if (!isNaN(price) && price > 0 && !isNaN(lot) && lot > 0) {
+      orders.push({ type, price, lot });
+    }
+  });
+  return orders;
+}
+// --------------------------------------------------- //
+
 
 document.getElementById('asset').addEventListener('change', function(e) {
   if(e.target.value !== 'custom') {
@@ -205,7 +292,7 @@ document.getElementById('asset').addEventListener('change', function(e) {
     }
   }
   updateConvHints();
-  runCalc();
+  scheduleCalc();
 });
 
 function parseLotList(txt){
@@ -222,15 +309,9 @@ function lotAt(i, fixedLot, lotList){
   return fixedLot;
 }
 
-function getPriceDecimals() {
-  const tickStr = document.getElementById('tick').value || "0.01";
-  return tickStr.includes('.') ? tickStr.split('.')[1].length : 0;
-}
-
 function clearStats(){
   document.getElementById('statOrders').textContent = "-";
   document.getElementById('statLiquid').textContent = "-";
-  document.getElementById('statLoss').textContent = "-";
   document.getElementById('statDrag').textContent = "-";
   document.getElementById('statLots').textContent = "-";
   document.getElementById('statMargin').textContent = "-";
@@ -240,14 +321,14 @@ function runCalc(){
   const balance = +document.getElementById('balance').value || 0;
   const lev = +document.getElementById('leverage').value || 1;
   const stopoutPct = (+document.getElementById('stopout').value || 50)/100;
+  
+  // Setting New Grid
   const side = document.getElementById('side').value;
   const entry = +document.getElementById('entry').value || 0;
-  
-  // ใช้ parseFloat ดักจับกรณีผู้ใช้ลบจนช่องว่างเปล่า ป้องกัน NaN
   const fixedLotRaw = parseFloat(document.getElementById('fixedLot').value); 
   const fixedLot = isNaN(fixedLotRaw) ? 0 : fixedLotRaw; 
-  
   const lotList = parseLotList(document.getElementById('lotList').value);
+  
   const contract = +document.getElementById('contract').value || 100;
   const tick = +document.getElementById('tick').value || 0.01;
   const pipMode = document.getElementById('pipMode')?.checked || false;
@@ -258,10 +339,11 @@ function runCalc(){
   const upperBound = +document.getElementById('upperBound').value || 0;
   const lowerBound = +document.getElementById('lowerBound').value || 0;
 
+  const stuckOrders = getStuckOrders();
   const priceDec = getPriceDecimals(); 
   const tbody = document.getElementById('tbody');
   
-  // ดักจับค่า 0 หรือช่องว่าง ป้องกันลูปทำงานค้าง (Anti-freeze protection)
+  // Anti-freeze: ข้อมูลต้องครบถึงจะเริ่มลูป
   if(balance<=0 || entry<=0 || pipstep<=0 || contract<=0 || lev<=0 || (fixedLot<=0 && !lotList)){
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 20px; color: var(--warn);">กรุณากรอกข้อมูลให้ครบและมากกว่า 0 (โดยเฉพาะ Lot)</td></tr>';
     clearStats();
@@ -269,7 +351,7 @@ function runCalc(){
   }
 
   const dir = (side==='buy') ? -1 : +1; 
-  let entries = [];
+  let gridEntries = [];
   
   let firstOrderWithinBounds = true;
   if (useRange && (entry > upperBound || entry < lowerBound)) {
@@ -277,11 +359,11 @@ function runCalc(){
   }
   
   if (firstOrderWithinBounds || !useRange) {
-      entries.push({price: entry, lot: lotAt(0,fixedLot,lotList)});
+      gridEntries.push({price: entry, lot: lotAt(0,fixedLot,lotList)});
   }
 
   const maxSteps = 20000; 
-  let htmlBuilder = ''; // ใช้วิธีสร้างเป็น Text ยาวๆ แล้ว Inject ทีเดียว ลดภาระ DOM (เร็วขึ้น 10 เท่า)
+  let htmlBuilder = ''; 
 
   for(let step=0; step<=maxSteps; step++){
     const currentPrice = entry + (dir * step * pipstep);
@@ -294,31 +376,50 @@ function runCalc(){
     }
 
     if(step > 0 && isWithinRange){
-      entries.push({price: currentPrice, lot: lotAt(entries.length, fixedLot, lotList)});
+      gridEntries.push({price: currentPrice, lot: lotAt(gridEntries.length, fixedLot, lotList)});
     }
 
-    const lotsSum = entries.reduce((s,e)=>s+e.lot,0);
+    // 1. คำนวณ Lot & Margin ส่วนของ Grid ใหม่
+    const gridLotsSum = gridEntries.reduce((s,e)=>s+e.lot,0);
+    const gridMargin = currentPrice * contract * gridLotsSum / lev;
     
-    // ถ้าไม่มีออเดอร์เลยข้ามไป
-    if(lotsSum <= 0) {
-        if (step > 100) break; // ป้องกันลูปทำงานฟรีนานเกิน
+    // 2. คำนวณ Lot & Margin ส่วนของไม้เก่า (Stuck Orders)
+    let stuckLotsSum = 0;
+    let stuckMargin = 0;
+    let stuckPl = 0;
+    
+    for (const so of stuckOrders) {
+        stuckLotsSum += so.lot;
+        stuckMargin += currentPrice * contract * so.lot / lev;
+        
+        const move = currentPrice - so.price;
+        stuckPl += (so.type === 'buy' ? 1 : -1) * move * contract * so.lot;
+    }
+
+    // หยุดถ้าไม่มีออเดอร์เปิดเลยทั้งคู่ เพื่อกันลูปไม่รู้จบ
+    if(gridLotsSum === 0 && stuckLotsSum === 0) {
+        if (step > 100) break;
         continue;
     }
 
-    const margin = currentPrice * contract * lotsSum / lev;
+    // 3. รวมทุกอย่าง
+    const totalLotsSum = gridLotsSum + stuckLotsSum;
+    const totalMargin = gridMargin + stuckMargin;
     
-    let pl = 0;
-    for(const e of entries){
+    // 4. หา P/L ของ Grid ใหม่
+    let gridPl = 0;
+    for(const e of gridEntries){
       const move = (currentPrice - e.price);
-      pl += (side==='buy' ? 1 : -1) * move * contract * e.lot;
+      gridPl += (side==='buy' ? 1 : -1) * move * contract * e.lot;
     }
     
-    const equity = balance + pl;
-    const ml = equity / Math.max(margin, 1e-9);
+    const totalPl = gridPl + stuckPl;
+    const equity = balance + totalPl;
+    const ml = equity / Math.max(totalMargin, 1e-9);
 
-    let orderStatusText = entries.length;
+    let orderStatusText = gridEntries.length;
     if (!isWithinRange && useRange) {
-        orderStatusText = `<span style="color:#ef4444; font-size:11px;">${entries.length} (หลุดกรอบ)</span>`;
+        orderStatusText = `<span style="color:#ef4444; font-size:11px;">${gridEntries.length} (หลุดกรอบ)</span>`;
     }
 
     htmlBuilder += `
@@ -326,9 +427,9 @@ function runCalc(){
         <td>${step}</td>
         <td>${fmt(currentPrice, priceDec)}</td>
         <td>${orderStatusText}</td>
-        <td>${fmt(lotsSum, 2)}</td>
-        <td>${fmt(margin, 2)}</td>
-        <td style="color:${pl<0?'#ef4444':'#22c55e'}">${fmt(pl, 2)}</td>
+        <td>${fmt(totalLotsSum, 2)}</td>
+        <td>${fmt(totalMargin, 2)}</td>
+        <td style="color:${totalPl<0?'#ef4444':'#22c55e'}">${fmt(totalPl, 2)}</td>
         <td>${fmt(equity, 2)}</td>
         <td style="color:${ml<=stopoutPct?'#ef4444':''}">${(ml*100).toFixed(1)}%</td>
       </tr>
@@ -336,17 +437,15 @@ function runCalc(){
 
     if(ml <= stopoutPct || equity <= 0){
       const distance = Math.abs(currentPrice - entry);
-      document.getElementById('statOrders').textContent = entries.length + " ไม้";
+      document.getElementById('statOrders').textContent = gridEntries.length + " ไม้";
+      document.getElementById('statLots').textContent = fmt(totalLotsSum, 2);
       document.getElementById('statLiquid').textContent = fmt(currentPrice, priceDec);
-      document.getElementById('statLoss').textContent = fmt(Math.abs(pl), 2);
       document.getElementById('statDrag').textContent = fmt(distance, priceDec) + " ราคา";
-      document.getElementById('statLots').textContent = fmt(lotsSum, 2);
-      document.getElementById('statMargin').textContent = fmt(margin, 2);
+      document.getElementById('statMargin').textContent = fmt(totalMargin, 2);
       break;
     }
   }
   
-  // ยัด HTML ใส่ตารางรอบเดียว
   tbody.innerHTML = htmlBuilder;
 }
 
@@ -362,21 +461,19 @@ function updateConvHints(){
   }
 }
 
-// เพิ่มระบบ Debounce: หน่วงเวลารอพิมพ์เสร็จค่อยคำนวณ เพื่อไม่ให้ค้างบนมือถือ
-let calcTimeout;
-document.querySelectorAll('input, select').forEach(el => {
-  el.addEventListener('input', () => {
-    updateConvHints();
-    clearTimeout(calcTimeout);
-    calcTimeout = setTimeout(() => {
-      runCalc();
-    }, 300); // รอ 0.3 วินาทีหลังหยุดพิมพ์ค่อยคำนวณ
-  });
-});
-
-document.getElementById('runBtn').addEventListener('click', () => {
+function scheduleCalc() {
+  updateConvHints();
   clearTimeout(calcTimeout);
-  runCalc();
+  calcTimeout = setTimeout(() => {
+    runCalc();
+  }, 300);
+}
+
+// Attach generic listener
+document.querySelectorAll('.card.section input, .card.section select').forEach(el => {
+  if (!el.classList.contains('s-price') && !el.classList.contains('s-lot') && !el.classList.contains('s-type')) {
+    el.addEventListener('input', scheduleCalc);
+  }
 });
 
 // Init
